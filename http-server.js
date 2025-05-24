@@ -90,13 +90,17 @@ async function logMessageToSupabase(messageData) {
 
 // Execute task_complete tool
 async function executeTaskComplete(args) {
+  console.log(`[${new Date().toISOString()}] Starting executeTaskComplete with args:`, JSON.stringify(args, null, 2));
+  
   // Validate Twilio configuration
   if (!twilioClient) {
+    console.error(`[${new Date().toISOString()}] Twilio client not configured`);
     throw new Error('Twilio client is not configured. Check environment variables.');
   }
 
   // Extract and validate arguments
   const { message, to_phone_number } = args;
+  console.log(`[${new Date().toISOString()}] Processing message: "${message}" to: ${to_phone_number || 'default number'}`);
 
   if (!message) {
     throw new Error('Message is required');
@@ -120,11 +124,14 @@ async function executeTaskComplete(args) {
   }
 
   // Send SMS via Twilio
+  console.log(`[${new Date().toISOString()}] Sending SMS via Twilio...`);
   const twilioMessage = await twilioClient.messages.create({
     body: finalMessage,
     from: twilioPhoneNumber,
     to: recipient
   });
+
+  console.log(`[${new Date().toISOString()}] SMS sent successfully with SID: ${twilioMessage.sid}`);
 
   const result = {
     success: true,
@@ -136,6 +143,7 @@ async function executeTaskComplete(args) {
   };
 
   // Log to Supabase database
+  console.log(`[${new Date().toISOString()}] Logging to Supabase...`);
   const messageData = {
     message_sid: twilioMessage.sid,
     from_phone: twilioPhoneNumber,
@@ -320,9 +328,10 @@ app.get('/mcp', async (req, res) => {
 
 // MCP endpoint for direct JSON-RPC requests (POST)
 app.post('/mcp', async (req, res) => {
+  const startTime = Date.now();
   try {
     const request = req.body;
-    console.log('Received MCP request:', JSON.stringify(request, null, 2));
+    console.log(`[${new Date().toISOString()}] Received MCP request:`, JSON.stringify(request, null, 2));
     
     // Handle initialize request directly
     if (request.method === 'initialize') {
@@ -340,8 +349,14 @@ app.post('/mcp', async (req, res) => {
           }
         }
       };
-      console.log('Sending initialize response:', JSON.stringify(response, null, 2));
+      console.log(`[${new Date().toISOString()}] Sending initialize response (${Date.now() - startTime}ms):`, JSON.stringify(response, null, 2));
       return res.json(response);
+    }
+    
+    // Handle notifications/initialized request
+    if (request.method === 'notifications/initialized') {
+      console.log(`[${new Date().toISOString()}] Received notifications/initialized - acknowledging (${Date.now() - startTime}ms)`);
+      return res.status(200).send(); // No response body needed for notifications
     }
     
     // Handle tools/list request
@@ -372,12 +387,14 @@ app.post('/mcp', async (req, res) => {
           ]
         }
       };
-      console.log('Sending tools list response:', JSON.stringify(response, null, 2));
+      console.log(`[${new Date().toISOString()}] Sending tools list response (${Date.now() - startTime}ms):`, JSON.stringify(response, null, 2));
       return res.json(response);
     }
     
     // Handle tools/call request
     if (request.method === 'tools/call') {
+      console.log(`[${new Date().toISOString()}] Processing tools/call request (${Date.now() - startTime}ms)`);
+      console.log('Tool call params:', JSON.stringify(request.params, null, 2));
       const { name, arguments: args } = request.params;
       
       if (name !== 'task_complete') {
@@ -400,11 +417,12 @@ app.post('/mcp', async (req, res) => {
         }
       };
       
-      console.log('Sending tool call response:', JSON.stringify(response, null, 2));
+      console.log(`[${new Date().toISOString()}] Sending tool call response (${Date.now() - startTime}ms):`, JSON.stringify(response, null, 2));
       return res.json(response);
     }
     
     // Unknown method
+    console.log(`[${new Date().toISOString()}] Unknown method: ${request.method} (${Date.now() - startTime}ms)`);
     res.status(400).json({
       jsonrpc: "2.0",
       id: request.id || null,
@@ -415,7 +433,7 @@ app.post('/mcp', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('MCP request error:', error);
+    console.error(`[${new Date().toISOString()}] MCP request error (${Date.now() - startTime}ms):`, error);
     res.status(500).json({
       jsonrpc: "2.0",
       id: req.body?.id || null,
