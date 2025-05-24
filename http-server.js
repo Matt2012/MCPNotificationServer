@@ -17,11 +17,58 @@ const authToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
 const defaultRecipient = process.env.DEFAULT_PHONE_NUMBER;
 
+// Initialize Supabase client
+const supabaseUrl = process.env.SUPABASE_URL?.trim();
+const supabaseKey = process.env.SUPABASE_ANON_KEY?.trim();
+let supabase = null;
+
+if (supabaseUrl && supabaseKey) {
+  try {
+    supabase = createClient(supabaseUrl, supabaseKey);
+    console.log('✓ Supabase client initialized successfully');
+  } catch (error) {
+    console.log('⚠ Supabase client initialization failed:', error.message);
+  }
+} else {
+  console.log('⚠ Supabase not configured - missing environment variables');
+}
+
 let twilioClient = null;
 
 // Check if Twilio is configured
 function isTwilioConfigured() {
   return accountSid && authToken && twilioPhoneNumber && defaultRecipient;
+}
+
+// Check if Supabase is configured
+function isSupabaseConfigured() {
+  return supabase !== null;
+}
+
+// Function to log message to Supabase
+async function logMessageToSupabase(messageData) {
+  if (!isSupabaseConfigured()) {
+    console.log('Supabase not configured, skipping database logging');
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('sms_messages')
+      .insert([messageData])
+      .select();
+
+    if (error) {
+      console.error('Error logging to Supabase:', error);
+      return null;
+    }
+
+    console.log('✓ Message logged to Supabase:', data[0]?.id);
+    return data[0];
+  } catch (error) {
+    console.error('Supabase logging error:', error);
+    return null;
+  }
 }
 
 // Initialize Twilio client if configured
@@ -124,6 +171,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       sent_length: finalMessage.length,
       recipient: recipient
     };
+
+    // Log to Supabase database
+    const messageData = {
+      message_sid: twilioMessage.sid,
+      from_phone: twilioPhoneNumber,
+      to_phone: recipient,
+      original_message: message,
+      sent_message: finalMessage,
+      original_length: originalLength,
+      sent_length: finalMessage.length,
+      truncated: originalLength > 250,
+      status: 'sent',
+      sent_at: new Date().toISOString(),
+      twilio_status: twilioMessage.status
+    };
+
+    await logMessageToSupabase(messageData);
 
     console.log(`✓ SMS sent successfully: ${twilioMessage.sid}`);
 

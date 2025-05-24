@@ -16,9 +16,20 @@ const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
 const defaultRecipient = process.env.DEFAULT_PHONE_NUMBER;
 
 // Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = process.env.SUPABASE_URL?.trim();
+const supabaseKey = process.env.SUPABASE_ANON_KEY?.trim();
+let supabase = null;
+
+if (supabaseUrl && supabaseKey) {
+  try {
+    supabase = createClient(supabaseUrl, supabaseKey);
+    console.log('✓ Supabase client initialized successfully');
+  } catch (error) {
+    console.log('⚠ Supabase client initialization failed:', error.message);
+  }
+} else {
+  console.log('⚠ Supabase not configured - missing environment variables');
+}
 
 let twilioClient = null;
 
@@ -29,7 +40,7 @@ function isTwilioConfigured() {
 
 // Check if Supabase is configured
 function isSupabaseConfigured() {
-  return supabaseUrl && supabaseKey;
+  return supabase !== null;
 }
 
 // Function to log message to Supabase
