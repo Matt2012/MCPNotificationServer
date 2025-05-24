@@ -1,8 +1,9 @@
 {
   "mcpServers": {
     "twilio-sms": {
-      "command": "python",
-      "args": ["/path/to/your/project/main.py"],
+      "command": "node",
+      "args": ["server.js"],
+      "cwd": "/path/to/your/project",
       "env": {
         "TWILIO_ACCOUNT_SID": "your_account_sid_here",
         "TWILIO_AUTH_TOKEN": "your_auth_token_here", 
