@@ -15,6 +15,10 @@ author = "agent"
 task = "workflow.run"
 args = "Twilio MCP Server"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "HTTP MCP Server"
+
 [[workflows.workflow]]
 name = "Twilio MCP Server"
 author = "agent"
@@ -23,5 +27,18 @@ author = "agent"
 task = "shell.exec"
 args = "node server.js"
 
+[[workflows.workflow]]
+name = "HTTP MCP Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node http-server.js"
+waitForPort = 5000
+
 [deployment]
 run = ["sh", "-c", "python main.py"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80
