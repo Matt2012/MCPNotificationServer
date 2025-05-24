@@ -12,6 +12,7 @@ const twilio = require('twilio');
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
+const defaultRecipient = '+447789518332'; // Default UK number
 
 let twilioClient = null;
 
@@ -57,10 +58,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             to_phone_number: {
               type: 'string',
-              description: 'The recipient phone number (E.164 format)'
+              description: 'The recipient phone number (E.164 format). If not provided, uses default number +447789518332'
             }
           },
-          required: ['message', 'to_phone_number']
+          required: ['message']
         }
       }
     ]
@@ -87,12 +88,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     throw new Error('Message is required');
   }
 
-  if (!to_phone_number) {
-    throw new Error('to_phone_number is required');
-  }
+  // Use default recipient if no phone number provided
+  const recipient = to_phone_number || defaultRecipient;
 
   // Validate phone number format
-  if (!to_phone_number.startsWith('+')) {
+  if (!recipient.startsWith('+')) {
     throw new Error('Phone number must be in E.164 format (start with +)');
   }
 
@@ -110,7 +110,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const twilioMessage = await twilioClient.messages.create({
       body: finalMessage,
       from: twilioPhoneNumber,
-      to: to_phone_number
+      to: recipient
     });
 
     const result = {
