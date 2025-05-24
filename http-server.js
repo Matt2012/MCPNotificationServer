@@ -156,7 +156,16 @@ app.get('/health', (req, res) => {
 });
 
 // MCP endpoint with SSE transport
-app.use('/mcp', async (req, res) => {
+app.get('/mcp', async (req, res) => {
+  // Set proper SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Cache-Control'
+  });
+
   const transport = new SSEServerTransport('/mcp', res);
   await server.connect(transport);
 });
