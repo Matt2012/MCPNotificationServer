@@ -157,17 +157,15 @@ app.get('/health', (req, res) => {
 
 // MCP endpoint with SSE transport
 app.get('/mcp', async (req, res) => {
-  // Set proper SSE headers
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Cache-Control'
-  });
-
-  const transport = new SSEServerTransport('/mcp', res);
-  await server.connect(transport);
+  try {
+    const transport = new SSEServerTransport('/mcp', res);
+    await server.connect(transport);
+  } catch (error) {
+    console.error('SSE connection error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to establish SSE connection' });
+    }
+  }
 });
 
 // Start HTTP server
