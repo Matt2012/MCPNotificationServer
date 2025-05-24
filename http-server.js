@@ -18,11 +18,28 @@ const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
 const defaultRecipient = process.env.DEFAULT_PHONE_NUMBER;
 
 // Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL?.trim();
-const supabaseKey = process.env.SUPABASE_ANON_KEY?.trim();
+let supabaseUrl = process.env.SUPABASE_URL?.trim();
+let supabaseKey = process.env.SUPABASE_ANON_KEY?.trim();
+
+// Extract URL from the environment variable (it might contain extra formatting)
+if (supabaseUrl && supabaseUrl.includes('https://')) {
+  const urlMatch = supabaseUrl.match(/https:\/\/[a-zA-Z0-9-]+\.supabase\.co/);
+  if (urlMatch) {
+    supabaseUrl = urlMatch[0];
+  }
+}
+
+// Extract key from the environment variable 
+if (supabaseKey && supabaseKey.includes('eyJ')) {
+  const keyMatch = supabaseKey.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);
+  if (keyMatch) {
+    supabaseKey = keyMatch[0];
+  }
+}
+
 let supabase = null;
 
-if (supabaseUrl && supabaseKey) {
+if (supabaseUrl && supabaseKey && supabaseUrl.startsWith('https://') && supabaseKey.startsWith('eyJ')) {
   try {
     supabase = createClient(supabaseUrl, supabaseKey);
     console.log('✓ Supabase client initialized successfully');
@@ -30,7 +47,7 @@ if (supabaseUrl && supabaseKey) {
     console.log('⚠ Supabase client initialization failed:', error.message);
   }
 } else {
-  console.log('⚠ Supabase not configured - missing environment variables');
+  console.log('⚠ Supabase not configured - missing or invalid environment variables');
 }
 
 let twilioClient = null;
@@ -69,6 +86,74 @@ async function logMessageToSupabase(messageData) {
     console.error('Supabase logging error:', error);
     return null;
   }
+}
+
+// Execute task_complete tool
+async function executeTaskComplete(args) {
+  // Validate Twilio configuration
+  if (!twilioClient) {
+    throw new Error('Twilio client is not configured. Check environment variables.');
+  }
+
+  // Extract and validate arguments
+  const { message, to_phone_number } = args;
+
+  if (!message) {
+    throw new Error('Message is required');
+  }
+
+  // Use default recipient if no phone number provided
+  const recipient = to_phone_number || defaultRecipient;
+
+  // Validate phone number format
+  if (!recipient.startsWith('+')) {
+    throw new Error('Phone number must be in E.164 format (start with +)');
+  }
+
+  // Truncate message if it exceeds 250 characters
+  const originalLength = message.length;
+  let finalMessage = message;
+  
+  if (originalLength > 250) {
+    finalMessage = message.substring(0, 247) + '...';
+    console.log(`Message truncated from ${originalLength} to 250 characters`);
+  }
+
+  // Send SMS via Twilio
+  const twilioMessage = await twilioClient.messages.create({
+    body: finalMessage,
+    from: twilioPhoneNumber,
+    to: recipient
+  });
+
+  const result = {
+    success: true,
+    message_sid: twilioMessage.sid,
+    truncated: originalLength > 250,
+    original_length: originalLength,
+    sent_length: finalMessage.length,
+    recipient: recipient
+  };
+
+  // Log to Supabase database
+  const messageData = {
+    message_sid: twilioMessage.sid,
+    from_phone: twilioPhoneNumber,
+    to_phone: recipient,
+    original_message: message,
+    sent_message: finalMessage,
+    original_length: originalLength,
+    sent_length: finalMessage.length,
+    truncated: originalLength > 250,
+    status: 'sent',
+    sent_at: new Date().toISOString(),
+    twilio_status: twilioMessage.status
+  };
+
+  await logMessageToSupabase(messageData);
+
+  console.log(`✓ SMS sent successfully: ${twilioMessage.sid}`);
+  return result;
 }
 
 // Initialize Twilio client if configured
@@ -239,11 +324,96 @@ app.post('/mcp', async (req, res) => {
     const request = req.body;
     console.log('Received MCP request:', JSON.stringify(request, null, 2));
     
-    // Handle the request directly
-    const response = await server.request(request);
+    // Handle initialize request directly
+    if (request.method === 'initialize') {
+      const response = {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: "2024-11-05",
+          capabilities: {
+            tools: {}
+          },
+          serverInfo: {
+            name: "twilio-sms-mcp-server",
+            version: "1.0.0"
+          }
+        }
+      };
+      console.log('Sending initialize response:', JSON.stringify(response, null, 2));
+      return res.json(response);
+    }
     
-    console.log('Sending MCP response:', JSON.stringify(response, null, 2));
-    res.json(response);
+    // Handle tools/list request
+    if (request.method === 'tools/list') {
+      const response = {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          tools: [
+            {
+              name: 'task_complete',
+              description: 'Send SMS message via Twilio when a task is completed',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  message: {
+                    type: 'string',
+                    description: 'The message to send via SMS'
+                  },
+                  to_phone_number: {
+                    type: 'string',
+                    description: 'The recipient phone number (E.164 format). If not provided, uses configured default number'
+                  }
+                },
+                required: ['message']
+              }
+            }
+          ]
+        }
+      };
+      console.log('Sending tools list response:', JSON.stringify(response, null, 2));
+      return res.json(response);
+    }
+    
+    // Handle tools/call request
+    if (request.method === 'tools/call') {
+      const { name, arguments: args } = request.params;
+      
+      if (name !== 'task_complete') {
+        throw new Error(`Unknown tool: ${name}`);
+      }
+      
+      // Execute the SMS sending logic
+      const result = await executeTaskComplete(args);
+      
+      const response = {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2)
+            }
+          ]
+        }
+      };
+      
+      console.log('Sending tool call response:', JSON.stringify(response, null, 2));
+      return res.json(response);
+    }
+    
+    // Unknown method
+    res.status(400).json({
+      jsonrpc: "2.0",
+      id: request.id || null,
+      error: {
+        code: -32601,
+        message: "Method not found"
+      }
+    });
+    
   } catch (error) {
     console.error('MCP request error:', error);
     res.status(500).json({

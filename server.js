@@ -16,11 +16,28 @@ const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
 const defaultRecipient = process.env.DEFAULT_PHONE_NUMBER;
 
 // Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL?.trim();
-const supabaseKey = process.env.SUPABASE_ANON_KEY?.trim();
+let supabaseUrl = process.env.SUPABASE_URL?.trim();
+let supabaseKey = process.env.SUPABASE_ANON_KEY?.trim();
+
+// Extract URL from the environment variable (it might contain extra formatting)
+if (supabaseUrl && supabaseUrl.includes('https://')) {
+  const urlMatch = supabaseUrl.match(/https:\/\/[a-zA-Z0-9-]+\.supabase\.co/);
+  if (urlMatch) {
+    supabaseUrl = urlMatch[0];
+  }
+}
+
+// Extract key from the environment variable 
+if (supabaseKey && supabaseKey.includes('eyJ')) {
+  const keyMatch = supabaseKey.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);
+  if (keyMatch) {
+    supabaseKey = keyMatch[0];
+  }
+}
+
 let supabase = null;
 
-if (supabaseUrl && supabaseKey) {
+if (supabaseUrl && supabaseKey && supabaseUrl.startsWith('https://') && supabaseKey.startsWith('eyJ')) {
   try {
     supabase = createClient(supabaseUrl, supabaseKey);
     console.log('✓ Supabase client initialized successfully');
@@ -28,7 +45,7 @@ if (supabaseUrl && supabaseKey) {
     console.log('⚠ Supabase client initialization failed:', error.message);
   }
 } else {
-  console.log('⚠ Supabase not configured - missing environment variables');
+  console.log('⚠ Supabase not configured - missing or invalid environment variables');
 }
 
 let twilioClient = null;
