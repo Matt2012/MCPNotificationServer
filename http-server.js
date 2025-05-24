@@ -9,6 +9,7 @@ const {
 const twilio = require('twilio');
 const express = require('express');
 const cors = require('cors');
+const { createClient } = require('@supabase/supabase-js');
 
 // Initialize Twilio client
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
