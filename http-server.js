@@ -155,7 +155,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// MCP endpoint with SSE transport
+// MCP endpoint with SSE transport (GET)
 app.get('/mcp', async (req, res) => {
   try {
     const transport = new SSEServerTransport('/mcp', res);
@@ -165,6 +165,31 @@ app.get('/mcp', async (req, res) => {
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to establish SSE connection' });
     }
+  }
+});
+
+// MCP endpoint for direct JSON-RPC requests (POST)
+app.post('/mcp', async (req, res) => {
+  try {
+    const request = req.body;
+    console.log('Received MCP request:', JSON.stringify(request, null, 2));
+    
+    // Handle the request directly
+    const response = await server.request(request);
+    
+    console.log('Sending MCP response:', JSON.stringify(response, null, 2));
+    res.json(response);
+  } catch (error) {
+    console.error('MCP request error:', error);
+    res.status(500).json({
+      jsonrpc: "2.0",
+      id: req.body?.id || null,
+      error: {
+        code: -32603,
+        message: "Internal error",
+        data: error.message
+      }
+    });
   }
 });
 
