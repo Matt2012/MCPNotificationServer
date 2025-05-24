@@ -12,13 +12,13 @@ const twilio = require('twilio');
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
-const defaultRecipient = '+447789518332'; // Default UK number
+const defaultRecipient = process.env.DEFAULT_PHONE_NUMBER;
 
 let twilioClient = null;
 
 // Check if Twilio is configured
 function isTwilioConfigured() {
-  return accountSid && authToken && twilioPhoneNumber;
+  return accountSid && authToken && twilioPhoneNumber && defaultRecipient;
 }
 
 // Initialize Twilio client if configured
@@ -58,7 +58,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             to_phone_number: {
               type: 'string',
-              description: 'The recipient phone number (E.164 format). If not provided, uses default number +447789518332'
+              description: 'The recipient phone number (E.164 format). If not provided, uses configured default number'
             }
           },
           required: ['message']
